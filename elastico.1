@@ -1,0 +1,233 @@
+.\" First test 
+.\" $> man ./elastico.1
+.\" See this pages for examples ::: http://tinyurl.com/y6hratuz
+.\" also this ::: http://tinyurl.com/ynaylg
+.TH ELASTICO 1 
+.SH NAME 
+elastico \- search log lines stored in Elasticsearch
+.SH SYNOPSIS
+.B elastico 
+[\fB-d\fR] [\fB-l\fR num] [\fB-t\fR TIMESTRING] [\fB-s\fR] [\fB-h\fR] 
+.IR QUERY 
+.SH WARNINGS
+If elastico \fBoutput\fR does not go to a pipe then it will be shown in the pager \fIless\fR.
+.TP
+This manual enters into details. The practical reader may find what he is looking for just jumping at example section at the end.
+.SH DESCRIPTION
+.TP
+The syntax of the QUERY is the so called \fBLucene Query Syntax\fR. It is almost identical of the one accepted by Kibana interface. 
+.TP
+These characters have special meaning in Lucene: + - && || ! () {} [] ^ "" ~ * ? : \\. '\\' is Lucene escape character. If your query behaves unexpectedly check them out and compare with the documentation resources provided at the end.
+.TP 
+Since in LCLS many of our hostname include the \fBdash\fR character, to simplify the search this char is transformed by default. A word like 'foo-bar' will be compiled and sent to Elasticsearch as '(foo AND bar)'. 
+.TP 
+Wildcard characters as: '*' and '?' can greatly reduce the search speed. A wildcard at the beginning of a word is expecially heavy because all words in the reverse index must be checked, just in case they will match on the following characters. Regexp can also be used, they must we written as /REGEXP/ and conform to the syntax here: http://tinyurl.com/y382rp8x.
+.TP
+By default the search is made into the \fBlclslogs\fR index, that is, we search into log files lines stored in \fBpsmetric01:/u2/logs\fR and processed by Elasticsearch. 
+.TP
+By default the search is limited to the log produced in the last 48 hours. If parameter \fB-l\fR or \fB-h\fR is present such restriction falls.
+.TP
+By default the search is made into the \fBsrc\fR field of each document. The field contains the log line as red from \fBpsmetric01:/u2/logs/*/*\fR.
+.TP
+The \fBlclslogs\fR index contains the following fields: 
+.TP
+.BR \fBdate\fR 
+Date appearing in the log file, extended to contain a guessed value for the year.  
+.TP
+.BR \fBmachine\fR 
+Machine producing the message. (eg. psmetric01, psana101 etc. )
+.TP
+.BR service
+Service producing the message (eg. cron, systemd, ... )
+.TP
+.BR message
+The message part of a log line. (eg. "Cannot create socket to [psmonit]:8020 -- Connection refused")
+.TP
+.BR file
+Log file name where the message was found (eg. messages, cron, etc. )
+.TP
+.BR src
+To simplify the search by shell this field was added in a second phase. It contains the log line as it is recorded in 'psmetric01:/u2/logs/*/*'. eg:
+ "Dec  5 14:57:27 psana1507 monit[6494]: Cannot create socket to [psmonit]:8020 -- Connection refused"  
+.SH OPTIONS
+.TP
+.BR -d  
+Shows \fBdebug\fR information. Intermediate values and global variables that can simplify the understanding of the program in case something goes wrong. The debug information is printed at the end of the search result into STDERR.
+.TP
+.BR -l 
+Maximum number of \fBlines\fR to retrieve from Elasticsearch. It must be a positive integer. Default to 200. The current maximum value is 10_000. This parameter is complementary to '-t'. When '-l' and '-t' are used together then '-l' prevails.
+.TP
+.BR -h
+The matched words in output will be \fBhighlighted\fR. Words of specific fields as e.g. machine:foo will not be highlighted, it only applies to the default \fBsrc\fR field. Default to false.
+.TP 
+.BR -s
+By default this program asks Elasticsearch to \fBsort\fR the results by time. With this parameter Elasticsearch will be asked instead to sort the results by relevance. 
+.TP
+.BR -t 
+\fBTime window\fR. With this parameter we tell Elasticsearch we are interested in filtering the search to to a specific time window.
+.TP
+Sometimes the '-t' time limits will not be honored and some of the older log will be discarded. If '-t' parameter is called together with parameter '-l' then parameter '-l' will prevail. If parameter '-t' is called without parameter '-l' and its implied number of results would be larger than 10_000 then the default number of lines will be printed, that is 200. When a cut needs to be done on the log lines by default older logs are cut.       
+.TP  
+There are three accepted syntax to specify the time window:
+.TP
+.nf 
+1] Delta backward in time from present time.
+
+ -t ABS_DELTA
+    ABS_DELTA matches regexp /\\d+[dhm]/
+
+ -t 10m             
+  => chooses logs produces in the last 10 minutes.
+.TP
+2] Delta backward/forward in time from a specified date-time instant.
+
+ -t [YYYY]-[MMM]-[DD]-[HH:MM]__[+-]ABS_DELTA
+
+ -t  2018-dec-10-10:30__-10m
+ -t  dec-10__+3d 
+  => chooses logs produced from dec-10 to 3 days afterwards.
+.TP
+3] Explicit time window described by two date-time points. 
+
+ -t [YYYY]-[MMM]-[DD]-[HH:MM]__[YYYY]-[MMM]-[DD]-[HH:MM]
+
+ -t 2018-dec-10-15:50__2018-dec-15-16:30  
+  => chooses logs produced in between 2 specific points in time.        
+
+ -t dec-10__dec-15
+  => chooses logs produced from dec-10 to dec-15 (in the current year).
+ 
+ -t 14:30__15:15
+  => chooses logs produced from 14:30 to 15:15 (of today).
+.fi
+.TP
+In general, when date part is missing from a time point description values are inferred from the current day. So dec-10 is auto completed to 2018-dec-10, if we are in the year 2018.       
+.TP
+If the time part is missing on the left hand side of a '__' divider, then it is auto-completed into the first second of the selected day; on the right hand side of a '__' divider it is auto-completed to the last second of the selected day. 
+.SH REQUIREMENTS
+.TP
+.BR curl
+This software is not at all necessary and the dependency may be removed in future releases.
+.TP
+.BR less
+Default pager chosen to display the output.
+.TP
+.BR ruby
+This software is written in Ruby. Rationale; Ruby is some kind of a O.O. version of Perl. Ideal for intense regexp work.     
+.SH EXAMPLES
+.nf 
+===========================================
+==== Simple One Word Query ================
+===========================================
+
+# Generic search over a word ... here a machine name 
+\fB$> elastico psana101\fR        
+
+# Machine names with dash are fine
+\fB$> elastico psbuild-rhel7-01\fR        
+
+# Generic search over a word ... here a service name 
+\fB$> elastico monit\fR           
+
+# Generic search over a word ... here a user name    
+\fB$> elastico nmingott\fR        
+
+===========================================
+=== Special Characters ====================
+===========================================
+
+# Generic search over everything that can be: psana101, psana103 etc.
+# Observe that the quotes are fundamental to stop Bash from interpreting "*".
+# NOTE: wildcards are computationally heavy.
+# NOTE: wildcards at the beginning of words are very heavy.
+\fB$> elastico 'psana*'\fR        
+
+# Search all log lines where there appear the word "nmingott"
+# AND the machine field contains "psmetric".
+# Boolean MUST BE uppercase words.
+\fB$> elastico 'nmingott AND machine:psmetric*'\fR
+
+# Elaboration respect to the previous example, matching all lines where "nmingott"
+# appears and the machine is a string containing psana* or *metric*.
+# This examples shows that (...) is the syntax for  
+# grouping of Boolean and that it is not necessary to write
+# (machine:*metric* OR machine:*ana*) in full.
+\fB$> elastico 'nmingott AND machine:(psmetric* OR psana*)'\fR
+
+# See last logs in psmetric01
+\fB$> elastico 'machine:psmetric01'\fR
+
+# See the last 400 log lines in psmetric01
+\fB$> elastico -l 400 'machine:psmetric01'\fR
+
+# See the log lines that best match a string,
+# return results according to Elasticsearch 'relevance' 
+# algorithm, not by date. In general, more time the string
+# is matched in the log line the more a line is 'relevant'.
+# ATTENTION: here "psana" is not a match, before "ana" there
+# must be a stopword as a space or "-" etc.
+\fB$> elastico -S 'ana*'\fR
+
+# Highlight the search results 
+\fB$> elastico -l 20 -h 'wilko'\fR
+
+# Auto-complete only for a specific number of characters
+# In this case all 'psana' followed by 3 characters.
+\fB$> psana -h 'psana???'\fR
+
+=============================================
+=== Time Window Selections ==================
+=============================================
+
+# Show all logs related to 'psana???' in the last
+# 5 minutes. With the same syntax we can use the specifiers
+# 'm' form minutes, 'h' for 'hours and  'd' for days.
+\fB$> elastico -t 5m 'psana???'\fR
+
+# If we are unhappy about the result and suspect something
+# is wrong the first thing to do is to check how 'elastico' interpreted
+# the time window. The information is written after the search results, on STDERR.
+\fB$> elastico -d -t 5m 'psana???'\fR
+
+# We want to see the results moving around a specific
+# point in time. Suppose 5 minutes after 
+# the date 15 dic 2018 at 13:00
+\fB$> elastico -t 2018-dec-15-13:00__+5m 'psana???'\fR
+# or, if we are still in 2018: 
+\fB$> elastico -t dec-15-13:00__+5m 'psana???'\fR
+
+# We want to see the results moving around a specific
+# point in time. Suppose 10 minutes before
+# the date 15 dic 2018 at 13:00
+\fB$> elastico -t 2018-dec-15-13:00__-10m 'psana???'\fR
+# or, if we are still in 2018: 
+\fB$> elastico -t dec-15-13:00__-10m 'psana???'\fR
+
+# We want to see the results between two specific points in time 
+\fB$> elastico  -t 2018-dec-15-13:00__2018-dec-16-14:25 'psana101'\fR
+or, if we are still in 2018 
+\fB$> elastico  -t dec-15-13:00__dec-16-14:25 'psana101'\fR
+
+# We want to see the logs between two specific dates.
+# If the hour is not specified and there are two specific dates
+# then the hour for the left hand side is 00:00,
+# the hour for the right hand side is 23:59.
+\fB$> elastico  -t dec-15__dec-16 'psana103'\fR
+
+# Filter all today logs generated between 10:30 and 11:00.
+\fB$> elastico  -t 10:30__11:00 'psana103'\fR
+.fi 
+.SH REFERENCES
+.nf
+-] "Lucene Query Syntax", see https://goo.gl/GPPSdJ
+-] "Elasticsearch Query String", see http://tinyurl.com/y3cbyas8
+-] "Elasticsearch the definitive guide" by Gromley, Tong -- O'Reilly 2015.
+-] "Regexp Query in Elasticsearch", see http://tinyurl.com/y382rp8x
+.fi
+.SH SEE ALSO
+elasticall(1)
+.SH BUGS
+No known bugs.
+.SH AUTHOR
+Dr. Nicola Mingotti (nicola.mingotti@slac.stanford.edu)
+
