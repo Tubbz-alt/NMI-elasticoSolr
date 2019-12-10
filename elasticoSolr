@@ -36,6 +36,7 @@ require 'date'
 require 'tempfile'
 # 
 # require 'pry'
+# require 'pry-nav'
 
 # -] If we put "elastico" output in a pipe and the pipe gets closed 
 #    this prevents ugly error messages and give the same typical behaviour
@@ -43,15 +44,24 @@ require 'tempfile'
 #    see here for details: http://tinyurl.com/y3ehavge
 Signal.trap("SIGPIPE", "SYSTEM_DEFAULT") 
 
+
+# ==== Query examples =====================================
 # -] Example of Lucene Query syntax to Elasticsearch CURL 
 # 
 # curl -XGET 'http://psmetric04:9200/lclslogs/_search?pretty=true' -H 'Content-Type: application/json' -d '{"query": { "query_string": { "default_field":"src", "query":"psmetric01"     }      }     }'
+# 
+# -] Example of Solr query 
+# XXXX 
+
 
 # ==========================================================
 # Global variables determined with defaul values 
-# that can be modified by command line parameters.
+# that can be modified by command line parameters or
+# by the file "~/.elasticoSolr. 
 # =========================================================
-#
+# -] Connection variables 
+$HOST = 'psmetric04'
+$PORT = '8983'
 # -] Upper limit to the number of output lines required. 
 #    This value is overriddend if the parameter "-t" is set.
 # -] DEFAULT_LIMIT is useful because it is a way to discover if the user
@@ -90,6 +100,35 @@ $DATE0 = ((Time.now.to_i)*1000) - (48 * 60 * 60 * 1_000)
 $DATE1 = ((Time.now.to_i)*1000)
 
 # =========================================================
+
+
+
+# ---------- example file ~/elasticoSolr ------------------------------
+# # elasticoSolr configuration file
+# # the admitted syntax is VAR VALUE
+# # note that all VALUE will be converted to String.
+# HOST "localhost"
+# PORT 18983
+# ---------------------------------------------------------------------
+
+# -] Read global variable values from configurtion file '~/.elasticoSolr' if it exists
+if  File.file? "#{Dir.home}/.elasticoSolr" then 
+  lines = File.open("#{Dir.home}/.elasticoSolr", "r").readlines 
+  lines.each do |l|
+    # binding.pry
+    # skip lines starting with "#" 
+    next if l.match /^\s*#/
+    # split on whites, extract fields and strip whites on them 
+    fields = l.split.map { |x| x.strip  }
+    # skip liknes having more than 2 fields 
+    next if fields.length != 2 
+    # update the global variable values
+    cmd = %Q[ $#{fields[0]} = '#{fields[1]}' ] 
+    # binding.pry
+    eval(cmd)
+  end  
+end 
+
 
 
 # -] Make a string bold for the terminal 
@@ -423,7 +462,7 @@ def curlQuery(lucQstr="*", sorted: true, size: 20, highlight: false, count: fals
                        #{highlightStr}
                        "df": "src"
                            }
-                     }' 'http://localhost:18983/solr/lclsLogs/select'  ]
+                     }' 'http://#{$HOST}:#{$PORT}/solr/lclsLogs/select'  ]
 
 
   # Store the query for debug purposes 
