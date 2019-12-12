@@ -1,6 +1,15 @@
-# elastico
 
-The full documentation is here: https://slac-lcls.github.io/elastico/
+# elasticoSolr
+
+Software to query our log files search engine from the shell. 
+. Needs to see psmetric04
+. Currently installed in psmetric01 
+
+This software is a port of the previous 'elastico' from Elasticsearch to Solr.
+
+Retrocompatibility was one of my first objectives so most of Elastico documentation suold be still relevant. Either the manpage or the webpages. 
+
+Elastico full documentation is here: https://slac-lcls.github.io/elastico/
 
 
 
