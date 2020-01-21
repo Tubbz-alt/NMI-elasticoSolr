@@ -5,12 +5,8 @@
 
 ---- TODO x Solr -----
 
--] parameter to select the search to be done with Solr 
 -] adapt MAN page 
 -] re-read all and adapt comment: from Elasticsearch to Solr.
-
--] define the ".elastico" file for configuration
-   e.g. default, hostname, port, query, time interval, result number etc. 
 
 --- DONE SOLR -----------
 -] improved call of less, added parameters (valid for FreeBSD and Linux)
@@ -19,7 +15,7 @@
 -] call Solrt instead of Elasticsearch 
 -] 'cmd' template var to be modified 
 -] time is to be represented in Zulu time instead of milliseconds 
-
+-] configuration file for global variables in: ~/.elasticoSolr 
 
 ---- DONE ------
 -] possibility of sorting results per log date [-s]
@@ -46,22 +42,19 @@ Signal.trap("SIGPIPE", "SYSTEM_DEFAULT")
 
 
 # ==== Query examples =====================================
-# -] Example of Lucene Query syntax to Elasticsearch CURL 
-# 
-# curl -XGET 'http://psmetric04:9200/lclslogs/_search?pretty=true' -H 'Content-Type: application/json' -d '{"query": { "query_string": { "default_field":"src", "query":"psmetric01"     }      }     }'
-# 
 # -] Example of Solr query 
-# XXXX 
+# XXXX TODO XXXX 
 
 
 # ==========================================================
-# Global variables determined with defaul values 
+# Global variables determined with default values 
 # that can be modified by command line parameters or
 # by the file "~/.elasticoSolr. 
 # =========================================================
 # -] Connection variables 
 $HOST = 'psmetric04'
 $PORT = '8983'
+$COLLECTION = 'lclsLogs2'
 # -] Upper limit to the number of output lines required. 
 #    This value is overriddend if the parameter "-t" is set.
 # -] DEFAULT_LIMIT is useful because it is a way to discover if the user
@@ -122,6 +115,7 @@ if  File.file? "#{Dir.home}/.elasticoSolr" then
     fields = l.split.map { |x| x.strip  }
     # skip liknes having more than 2 fields 
     next if fields.length != 2 
+    # ATTENTION: this of course is not safe, if possible remove "eval" 
     # update the global variable values
     cmd = %Q[ $#{fields[0]} = '#{fields[1]}' ] 
     # binding.pry
@@ -452,6 +446,15 @@ def curlQuery(lucQstr="*", sorted: true, size: 20, highlight: false, count: fals
   #                    } ' ]
 
   # 'review #optipe 
+  # 
+  # fq     : filter query. Limit the extension of the search set. But, this limit does not 
+  #          influence the relevance scoring. see pg. 211 "Solr in Action.
+  # fl     : field to return.
+  # q      : query. 
+  # rows   : maximum number of rows (matching documents) to return.
+  # sort   : sort of the selected documents. Overrides relevancy scores.
+  # df     : default field over wich to perform the search if no field is indicated explicitely. 
+  # 
   cmd = %Q[ curl -s -X POST -H 'Content-Type: application/json' --data-binary '{
                    params: { 
                        "fq": "date:[#{mSeccondsToZuluTimeString($DATE0)} TO #{mSeccondsToZuluTimeString($DATE1)}]",
@@ -460,9 +463,9 @@ def curlQuery(lucQstr="*", sorted: true, size: 20, highlight: false, count: fals
                        "rows": "#{$LIMIT}",  
                        "sort":"date desc",
                        #{highlightStr}
-                       "df": "src"
+                       "df": "catchAll"
                            }
-                     }' 'http://#{$HOST}:#{$PORT}/solr/lclsLogs/select'  ]
+                     }' 'http://#{$HOST}:#{$PORT}/solr/#{$COLLECTION}/select'  ]
 
 
   # Store the query for debug purposes 
@@ -479,6 +482,11 @@ def curlQuery(lucQstr="*", sorted: true, size: 20, highlight: false, count: fals
 
   # puts "DBG> #{cmd}" 
   out = `#{cmd}`
+  exitCode = $?.exitstatus
+  if exitCode != 0 then 
+    STDERR.puts "Abort. 'curl' command failed and returned code: #{exitCode}."
+    exit(1)
+  end
   # puts "DBG> #{out}" 
   out 
 end
@@ -593,6 +601,7 @@ end
 # 
 tmp = curlQuery( "* AND ( #{LQSTR2} )", size: $LIMIT, 
                  sorted: $SORTED, highlight: $HIGHLIGHT, count: false)
+
 
 
 # DEBUG : print the output stuff and quit
